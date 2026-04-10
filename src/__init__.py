@@ -1,0 +1,1 @@
+"""Emergency vehicle classification package."""

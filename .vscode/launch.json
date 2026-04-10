@@ -1,0 +1,23 @@
+{
+  "configurations": [
+    {
+      "name": "PowerShell Launch Current File",
+      "type": "PowerShell",
+      "request": "launch",
+      "args": [
+        "C:\\MinstonContractWork\\Assignment01\\Dev",
+        "WIP_abc"
+      ],
+      "script": "${file}",
+      "cwd": "${cwd}"
+    },
+    {
+      "type": "cmake",
+      "request": "launch",
+      "name": "Debug portfile(s)",
+      "cmakeDebugType": "external",
+      "pipeName": "\\\\.\\pipe\\vcpkg_ext_portfile_dbg",
+      "preLaunchTask": "Debug vcpkg commands"
+    }
+  ]
+}
