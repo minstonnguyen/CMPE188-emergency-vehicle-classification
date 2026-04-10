@@ -1,24 +1,39 @@
 # Emergency Vehicle Classification
 
-Course project starter for a computer vision model that identifies law enforcement and emergency vehicles in images, with a later extension to video.
+Minimal but real ML MVP for classifying emergency vehicles from images.
 
-## Project Scope
+The code is intentionally small:
+- one package for config, data loading, model, training, and inference
+- one YAML config file
+- one standard dataset layout
+- one checkpoint plus JSON metrics output
 
-Initial milestone:
-- Binary image classification: `emergency_vehicle` vs `non_emergency_vehicle`
+## What This MVP Does
 
-Possible extension:
-- Multi-class classification: `police`, `ambulance`, `fire_truck`, `non_emergency`
-- Video inference on recorded footage
+- Trains a CNN on image folders using PyTorch
+- Validates during training and saves the best checkpoint
+- Evaluates on a held-out test split
+- Writes report-ready metrics to `outputs/test_metrics.json`
+- Runs single-image inference from a saved checkpoint
 
-## Repository Structure
+## Expected Dataset Layout
 
-- `docs/` proposal and project writeups
-- `src/` training and inference code
-- `notebooks/` experiments and EDA
-- `data/` dataset instructions and local storage layout
-- `models/` saved checkpoints
-- `outputs/` predictions and demo artifacts
+Store images like this:
+
+```text
+data/processed/
+  train/
+    emergency_vehicle/
+    non_emergency/
+  val/
+    emergency_vehicle/
+    non_emergency/
+  test/
+    emergency_vehicle/
+    non_emergency/
+```
+
+You can later expand this to more classes such as `police`, `ambulance`, and `fire_truck`.
 
 ## Setup
 
@@ -28,10 +43,44 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-## Next Steps
+## Train
 
-1. Collect positive and negative examples from public datasets.
-2. Standardize labels into a single CSV manifest.
-3. Train a baseline CNN.
-4. Evaluate precision, recall, and confusion matrix.
-5. Run inference on unseen images and demo footage.
+```bash
+python src/train.py --config configs/baseline.yaml
+```
+
+Outputs:
+- `models/best_model.pt`
+- `outputs/training_history.json`
+- `outputs/test_metrics.json`
+
+Metrics include:
+- accuracy
+- weighted precision
+- weighted recall
+- weighted F1
+- confusion matrix
+
+## Infer
+
+```bash
+python src/infer.py --image path/to/example.jpg --checkpoint models/best_model.pt
+```
+
+## Repository Structure
+
+- `configs/` training configuration
+- `data/` dataset instructions and local storage layout
+- `docs/` proposal and course writeups
+- `models/` trained checkpoints
+- `notebooks/` optional experiments
+- `outputs/` metrics and predictions
+- `src/` runnable ML code
+
+## Production-Like Choices Kept Simple
+
+- Config file instead of hard-coded paths
+- Dedicated package instead of one giant script
+- Checkpointing the best validation model
+- Repeatable metrics written to disk
+- Clear CLI entrypoints for train and inference
