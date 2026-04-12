@@ -21,6 +21,7 @@ processed/
 ```
 
 Notes:
+
 - Folder names become class labels automatically.
 - All images should be ordinary RGB files such as `.jpg` or `.png`.
 - Do not commit large datasets to git.
