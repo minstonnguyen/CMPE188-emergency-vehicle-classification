@@ -26,7 +26,9 @@ def _require_dir(path: Path) -> None:
         )
 
 
-def build_dataloaders(config: TrainingConfig) -> tuple[DataLoader, DataLoader, DataLoader, list[str]]:
+def build_dataloaders(
+    config: TrainingConfig,
+) -> tuple[DataLoader, DataLoader, DataLoader, list[str]]:
     train_dir = config.data_dir / "train"
     val_dir = config.data_dir / "val"
     test_dir = config.data_dir / "test"

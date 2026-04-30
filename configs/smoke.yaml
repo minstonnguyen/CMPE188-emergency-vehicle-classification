@@ -1,0 +1,13 @@
+paths:
+  data_dir: data/smoke_processed
+  model_dir: models/smoke
+  output_dir: outputs/smoke
+
+training:
+  image_size: 64
+  batch_size: 4
+  epochs: 1
+  learning_rate: 0.001
+  seed: 42
+  num_workers: 0
+  device: cpu
