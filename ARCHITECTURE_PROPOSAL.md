@@ -58,3 +58,11 @@ Angular margin forces separation between visually-identical classes (civilian Ch
 | Simplest single model | Option 4 — DINOv2 + register tokens |
 | Best covert generalization, sparse labels | Option 3 — MAE + classification head |
 | Best overall (2-model budget) | Option 3 → Option 5: MAE flags anomalous regions, ArcFace ViT classifies. Stage 2 runs only when Stage 1 confidence is low. |
+
+---
+
+## Relation to this repository (current milestone)
+
+The codebase today implements the **binary** task described in the main `README.md` (`emergency_vehicle` vs `non_emergency`) using a **small CNN** and a standard **train / val / test** folder layout. That keeps the **ML pipeline** straightforward on coursework timelines: config → prepare data → train → evaluate → checkpoint → infer, with JSON metrics for reporting.
+
+Moving to the **three-class** problem above (civilian / overt LE / covert LE) is primarily a **data and labeling** change: new class folders or a label manifest, then either **three logits on the same CNN** or a backbone swap (e.g. **Option 4 — DINOv2 + register tokens**) without changing those stages. The optional **two-model** design (e.g. MAE screen → ArcFace classifier) adds a **second checkpoint** and a **gate** on low stage-one confidence.

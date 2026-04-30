@@ -2,8 +2,9 @@
 
 Place downloaded datasets here.
 
+- `incoming/` **drop zone**: put emergency vs non-emergency images in the two class folders, then run `python src/prepare_data.py` (see `incoming/README.md`)
 - `raw/` original downloads from Roboflow, Images.cv, or other public sources
-- `processed/` final train/val/test folder structure consumed by the MVP
+- `processed/` final train/val/test folder structure consumed by training (filled by `prepare_data.py` or `split_dataset.py`)
 
 Expected structure for the current training pipeline:
 

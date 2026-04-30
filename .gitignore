@@ -1,10 +1,24 @@
 .venv/
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
 .DS_Store
 
 data/raw/
 data/processed/
+data/smoke_processed/
+
+# User photo inbox (class folders hold local images only)
+data/incoming/emergency_vehicle/*
+data/incoming/non_emergency/*
 models/
 outputs/
 

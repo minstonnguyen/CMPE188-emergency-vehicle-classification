@@ -5,9 +5,10 @@ paths:
 
 training:
   image_size: 128
-  batch_size: 16
+  batch_size: 8
   epochs: 5
   learning_rate: 0.001
   seed: 42
   num_workers: 0
-  device: auto
+  # Default to CPU for reproducibility on lab machines; set to cuda or auto if you have a GPU.
+  device: cpu

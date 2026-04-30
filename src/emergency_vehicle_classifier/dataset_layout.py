@@ -9,9 +9,7 @@ def list_images(class_dir: Path) -> list[Path]:
     if not class_dir.is_dir():
         return []
     return sorted(
-        p
-        for p in class_dir.iterdir()
-        if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS
+        p for p in class_dir.iterdir() if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS
     )
 
 
@@ -44,7 +42,9 @@ def inspect_processed_layout(data_dir: Path) -> dict:
         consistent = True
         unified_classes: list[str] = []
     else:
-        unified = class_sets[0].intersection(*class_sets[1:]) if len(class_sets) > 1 else class_sets[0]
+        unified = (
+            class_sets[0].intersection(*class_sets[1:]) if len(class_sets) > 1 else class_sets[0]
+        )
         union = set().union(*class_sets)
         consistent = len(unified) == len(union) and len(union) > 0
         unified_classes = sorted(union)
