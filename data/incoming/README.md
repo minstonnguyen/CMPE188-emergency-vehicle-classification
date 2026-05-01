@@ -29,3 +29,7 @@ python src/prepare_data.py --dry-run
 **You still sort photos by hand** into the two folders above. The script does not know emergency vs civilian from one mixed pile— it only splits into train/val/test and refreshes `processed/`.
 
 If your download used different folder names, rename them to **`emergency_vehicle`** and **`non_emergency`** before running.
+
+## Sharing with teammates
+
+Images in both class folders are **intended to be tracked in git** on this repo so everyone sees the same labeled inbox. Ensure you have redistribution rights for any third-party datasets (e.g. Roboflow exports).
