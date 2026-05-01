@@ -11,14 +11,13 @@ htmlcov/
 dist/
 build/
 .DS_Store
+Thumbs.db
 
 data/raw/
 data/processed/
 data/smoke_processed/
 
-# User photo inbox (class folders hold local images only)
-data/incoming/emergency_vehicle/*
-data/incoming/non_emergency/*
+# Inbox (`data/incoming/...`) images are tracked for team sharing; `prepare_data.py` reads them into gitignored `data/processed/`.
 models/
 outputs/
 

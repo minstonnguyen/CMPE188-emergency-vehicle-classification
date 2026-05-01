@@ -25,4 +25,4 @@ Notes:
 
 - Folder names become class labels automatically.
 - All images should be ordinary RGB files such as `.jpg` or `.png`.
-- Do not commit large datasets to git.
+- Prefer **not** committing **`processed/`** (regenerate locally with `prepare_data.py`). **`incoming/`** class folders **may be committed** for a small shared team dataset; respect licenses and repo size limits.
