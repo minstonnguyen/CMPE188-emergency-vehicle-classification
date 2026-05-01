@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import re
 import sys
 import time
@@ -60,6 +61,9 @@ MIN_BYTES = 15 * 1024
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUT_DIR = PROJECT_ROOT / "data" / "incoming" / "emergency_vehicle"
+# Cache imageinfo results so we only hit the rate-limited API once and can
+# safely re-run the download phase as many times as needed.
+CACHE_FILE = PROJECT_ROOT / "data" / "incoming" / ".wm_imageinfo_cache.json"
 
 
 def safe_slug(value: str) -> str:
@@ -101,20 +105,33 @@ def search_files(session: requests.Session, term: str, limit: int = 50) -> list[
 
 
 def file_info(session: requests.Session, titles: list[str]) -> list[dict]:
-    """Look up imageinfo (URL, size, mime) for up to 50 file titles per call."""
+    """Look up imageinfo (URL, size, mime, thumburl) for many file titles.
+
+    Uses small batches with generous pauses so we don't trip the API limiter.
+    `iiurlwidth=1280` makes each result include a `thumburl` from Wikimedia's
+    thumbnail cache, which rate-limits much less aggressively than the
+    full-resolution media host.
+    """
     out: list[dict] = []
-    for i in range(0, len(titles), 50):
-        chunk = titles[i : i + 50]
-        data = api_get(
-            session,
-            {
-                "action": "query",
-                "format": "json",
-                "prop": "imageinfo",
-                "iiprop": "url|size|mime|extmetadata",
-                "titles": "|".join(chunk),
-            },
-        )
+    batch = 25
+    for i in range(0, len(titles), batch):
+        chunk = titles[i : i + batch]
+        try:
+            data = api_get(
+                session,
+                {
+                    "action": "query",
+                    "format": "json",
+                    "prop": "imageinfo",
+                    "iiprop": "url|size|mime|extmetadata",
+                    "iiurlwidth": 1280,
+                    "titles": "|".join(chunk),
+                },
+            )
+        except RuntimeError as exc:
+            print(f"  ! imageinfo batch {i}-{i + batch} failed: {exc}")
+            print("  ! continuing with what we have so far")
+            break
         pages = data.get("query", {}).get("pages", {})
         for page in pages.values():
             infos = page.get("imageinfo") or []
@@ -123,7 +140,8 @@ def file_info(session: requests.Session, titles: list[str]) -> list[dict]:
             info = infos[0]
             info["_title"] = page.get("title", "")
             out.append(info)
-        time.sleep(1.0)
+        print(f"  imageinfo: {len(out)} so far ({i + len(chunk)}/{len(titles)} queried)")
+        time.sleep(3.0)
     return out
 
 
@@ -140,16 +158,15 @@ def download_bytes(session: requests.Session, url: str, max_retries: int = 4) ->
         if r.status_code in (429, 500, 502, 503, 504):
             retry_after_raw = r.headers.get("Retry-After", "")
             try:
-                # Cap at 90s so we don't sit forever; if upstream wants more
-                # than that we'll just stop the run.
-                wait_s = min(int(retry_after_raw), 90) if retry_after_raw else 15
+                wait_s = min(int(retry_after_raw), 30) if retry_after_raw else 10
             except ValueError:
-                wait_s = 15
+                wait_s = 10
             print(f"  ! HTTP {r.status_code}; Retry-After={retry_after_raw or 'n/a'}; "
                   f"sleeping {wait_s}s (attempt {attempt + 1}/{max_retries})")
             time.sleep(wait_s)
-            if retry_after_raw and int(retry_after_raw) > 90:
-                # Server wants a long break - bubble up so caller can stop early.
+            # Anything over 30s is the long-cooldown signal - stop early
+            # so we don't make our IP penalty worse.
+            if retry_after_raw and int(retry_after_raw) > 30:
                 return "RATE_LIMITED"  # type: ignore[return-value]
             continue
         print(f"  ! HTTP {r.status_code} {url}")
@@ -166,6 +183,14 @@ def main() -> int:
         type=Path,
         default=DEFAULT_OUT_DIR,
         help="Output directory (default: data/incoming/emergency_vehicle).",
+    )
+    parser.add_argument(
+        "--auto-wait",
+        action="store_true",
+        help=(
+            "When upstream demands a long cooldown, sleep and resume "
+            "automatically instead of exiting."
+        ),
     )
     args = parser.parse_args()
 
@@ -192,42 +217,59 @@ def main() -> int:
         }
     )
 
-    # Phase 1: gather candidate file titles.
-    candidate_titles: list[str] = []
-    seen_titles: set[str] = set()
-    for term in SEARCH_TERMS:
+    # Phase 1: gather imageinfo - use cache if available so we don't hammer
+    # the rate-limited API on re-runs.
+    infos: list[dict] = []
+    if CACHE_FILE.exists():
         try:
-            titles = search_files(session, term, limit=50)
+            infos = json.loads(CACHE_FILE.read_text(encoding="utf-8"))
+            print(f"Loaded {len(infos)} cached imageinfo records from {CACHE_FILE.name}")
         except Exception as exc:  # noqa: BLE001
-            print(f"  ! search '{term}' failed: {exc}")
-            continue
-        added = 0
-        for t in titles:
-            if t in seen_titles:
-                continue
-            seen_titles.add(t)
-            candidate_titles.append(t)
-            added += 1
-        print(f"search '{term}': +{added} new (total {len(candidate_titles)})")
-        time.sleep(1.0)
-        # 3x target is plenty - many will be filtered (SVGs, tiny, near-dupes).
-        if len(candidate_titles) >= args.target * 3:
-            break
+            print(f"  ! cache load failed: {exc}; refetching")
+            infos = []
 
-    # Cap candidates so we don't hammer the API when we already have plenty.
-    candidate_titles = candidate_titles[: max(args.target * 3, 150)]
-    print(f"\n{len(candidate_titles)} candidate file titles. Fetching imageinfo...")
-    infos = file_info(session, candidate_titles)
-    print(f"got imageinfo for {len(infos)} files\n")
+    if not infos:
+        candidate_titles: list[str] = []
+        seen_titles: set[str] = set()
+        for term in SEARCH_TERMS:
+            try:
+                titles = search_files(session, term, limit=50)
+            except Exception as exc:  # noqa: BLE001
+                print(f"  ! search '{term}' failed: {exc}")
+                continue
+            added = 0
+            for t in titles:
+                if t in seen_titles:
+                    continue
+                seen_titles.add(t)
+                candidate_titles.append(t)
+                added += 1
+            print(f"search '{term}': +{added} new (total {len(candidate_titles)})")
+            time.sleep(1.0)
+            if len(candidate_titles) >= args.target * 3:
+                break
+
+        candidate_titles = candidate_titles[: max(args.target * 3, 150)]
+        print(f"\n{len(candidate_titles)} candidate file titles. Fetching imageinfo...")
+        infos = file_info(session, candidate_titles)
+        print(f"got imageinfo for {len(infos)} files\n")
+        try:
+            CACHE_FILE.write_text(json.dumps(infos, ensure_ascii=False), encoding="utf-8")
+            print(f"cached imageinfo -> {CACHE_FILE}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"  ! cache save failed: {exc}")
 
     saved = 0
     for info in infos:
         if saved >= args.target:
             break
-        url = info.get("url") or ""
+        # Original (full-res) URL is mainly used for filtering/extension; we
+        # download the thumbnail to dodge upload.wikimedia.org rate limits.
+        original_url = info.get("url") or ""
+        thumb_url = info.get("thumburl") or original_url
         mime = info.get("mime") or ""
         width = int(info.get("width") or 0)
-        ext = Path(urlparse(url).path).suffix.lower()
+        ext = Path(urlparse(original_url).path).suffix.lower()
         if ext not in ALLOWED_EXTS:
             continue
         if not mime.startswith("image/"):
@@ -240,10 +282,25 @@ def main() -> int:
         dest = out_dir / name
         if dest.exists():
             continue
+        url = thumb_url
         body = download_bytes(session, url)
         if body == "RATE_LIMITED":
-            print("  ! upstream demanded a long cooldown; stopping run.")
-            break
+            if args.auto_wait:
+                # Sleep ~11 min so the 10-min Wikimedia cooldown definitely
+                # clears, then retry this same image.
+                wait_s = 11 * 60
+                print(f"  ! long cooldown; auto-waiting {wait_s}s then resuming...")
+                for remaining in range(wait_s, 0, -60):
+                    time.sleep(60)
+                    print(f"    ... {remaining - 60}s left")
+                body = download_bytes(session, url)
+                if body == "RATE_LIMITED" or body is None:
+                    print("  ! still throttled after wait; giving up.")
+                    break
+            else:
+                print("  ! upstream demanded a long cooldown; stopping run.")
+                print("    (re-run with --auto-wait to keep going automatically)")
+                break
         if body is None:
             time.sleep(2.0)
             continue
@@ -257,8 +314,9 @@ def main() -> int:
         dest.write_bytes(body)
         saved += 1
         print(f"  [{saved}/{args.target}] {dest.name} ({len(body) // 1024} KB)")
-        # Be polite to upload.wikimedia.org so we don't trip rate limits.
-        time.sleep(3.0)
+        # Be polite to upload.wikimedia.org so we don't trip the long
+        # (10-minute) cooldown. ~6s/image keeps us under the soft limit.
+        time.sleep(6.0)
 
     print(f"\nDone. Saved {saved} new image(s) to {out_dir}.")
     return 0 if saved > 0 else 1
