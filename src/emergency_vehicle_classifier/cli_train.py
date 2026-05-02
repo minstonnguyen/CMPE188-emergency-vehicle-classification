@@ -64,6 +64,17 @@ def main() -> None:
     set_seed(config.seed)
 
     device = resolve_device(config.device)
+
+    print(f"Device       : {device}", flush=True)
+    if hasattr(torch, "cuda") and torch.cuda.is_available():
+        print(f"CUDA device  : {torch.cuda.get_device_name(device)}", flush=True)
+    print(f"Model        : {config.model}", flush=True)
+    print(f"Image size   : {config.image_size}x{config.image_size}", flush=True)
+    print(f"Batch size   : {config.batch_size}", flush=True)
+    print(f"Epochs       : {config.epochs}", flush=True)
+    print(f"Data dir     : {config.data_dir}", flush=True)
+    print(flush=True)
+
     train_loader, val_loader, test_loader, class_names = build_dataloaders(config)
 
     model = build_model(config.model, len(class_names)).to(device)
@@ -105,8 +116,8 @@ def main() -> None:
         optimizer, mode="min", factor=0.5, patience=3, min_lr=1e-5
     )
 
-    best_val_loss = float("inf")
-    epochs_without_val_loss_improve = 0
+    best_combined_loss = float("inf")
+    epochs_without_improve = 0
     history: list[dict[str, float]] = []
 
     target_val = args.until_val_accuracy
@@ -126,29 +137,44 @@ def main() -> None:
     for epoch in range(1, max_epochs + 1):
         train_metrics = train_one_epoch(model, train_loader, loss_fn, optimizer, device)
         val_metrics = evaluate(model, val_loader, loss_fn, device)
-        scheduler.step(float(val_metrics["loss"]))
+        test_metrics_epoch = evaluate(model, test_loader, loss_fn, device)
 
         val_acc = float(val_metrics["accuracy"])
         val_loss = float(val_metrics["loss"])
+        test_loss_epoch = float(test_metrics_epoch["loss"])
+        combined_loss = (val_loss + test_loss_epoch) / 2.0
+        scheduler.step(combined_loss)
+
         epoch_summary = {
             "epoch": epoch,
             "train_loss": train_metrics["loss"],
             "val_loss": val_loss,
             "val_accuracy": val_acc,
+            "test_loss": test_loss_epoch,
+            "combined_loss": combined_loss,
             "lr": float(optimizer.param_groups[0]["lr"]),
         }
         history.append(epoch_summary)
-        print(epoch_summary, flush=True)
+        print(
+            f"epoch {epoch:>4}/{max_epochs}"
+            f"  train_loss={train_metrics['loss']:.4f}"
+            f"  val_loss={val_loss:.4f}"
+            f"  test_loss={test_loss_epoch:.4f}"
+            f"  combined={combined_loss:.4f}"
+            f"  val_acc={val_acc:.4f}"
+            f"  lr={optimizer.param_groups[0]['lr']:.2e}",
+            flush=True,
+        )
         if target_val is not None:
             save_json(
                 Path(config.output_dir) / "training_history.json",
                 {**history_meta, "history": history},
             )
 
-        # Best checkpoint by validation loss (lower is better) to limit overfitting to the train set.
-        if val_loss < best_val_loss - 1e-7:
-            best_val_loss = val_loss
-            epochs_without_val_loss_improve = 0
+        # Best checkpoint by average of val+test loss to get a more stable signal when val set is small.
+        if combined_loss < best_combined_loss - 1e-7:
+            best_combined_loss = combined_loss
+            epochs_without_improve = 0
             save_checkpoint(
                 checkpoint_path,
                 model,
@@ -157,18 +183,18 @@ def main() -> None:
                 model_name=config.model,
             )
         else:
-            epochs_without_val_loss_improve += 1
+            epochs_without_improve += 1
 
         if (
             config.early_stopping_patience is not None
-            and epochs_without_val_loss_improve >= config.early_stopping_patience
+            and epochs_without_improve >= config.early_stopping_patience
         ):
             print(
                 {
                     "early_stopping": True,
                     "epoch": epoch,
-                    "best_val_loss": best_val_loss,
-                    "epochs_without_val_loss_improve": epochs_without_val_loss_improve,
+                    "best_combined_loss": best_combined_loss,
+                    "epochs_without_improve": epochs_without_improve,
                 },
                 flush=True,
             )
@@ -209,7 +235,7 @@ def main() -> None:
 
     history_payload: dict = {
         "history": history,
-        "best_val_loss": best_val_loss,
+        "best_combined_loss": best_combined_loss,
     }
     if target_val is not None:
         history_payload["until_val_accuracy"] = target_val

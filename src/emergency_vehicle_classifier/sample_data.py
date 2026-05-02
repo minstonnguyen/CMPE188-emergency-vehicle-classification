@@ -12,7 +12,7 @@ def parse_args() -> argparse.Namespace:
         description="Generate a small synthetic dataset for smoke tests."
     )
     parser.add_argument("--output-dir", default="data/processed", help="Dataset output directory.")
-    parser.add_argument("--image-size", type=int, default=128, help="Square image size.")
+    parser.add_argument("--image-size", type=int, default=224, help="Square image size.")
     parser.add_argument("--seed", type=int, default=42, help="Random seed.")
     parser.add_argument(
         "--quick",

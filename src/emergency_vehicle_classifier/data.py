@@ -9,11 +9,17 @@ from torchvision import datasets, transforms
 from .config import TrainingConfig
 
 
+# ImageNet statistics — required by the pretrained ResNet-50 backbone.
+_IMAGENET_MEAN = [0.485, 0.456, 0.406]
+_IMAGENET_STD  = [0.229, 0.224, 0.225]
+
+
 def _base_transform(image_size: int) -> transforms.Compose:
     return transforms.Compose(
         [
             transforms.Resize((image_size, image_size)),
             transforms.ToTensor(),
+            transforms.Normalize(mean=_IMAGENET_MEAN, std=_IMAGENET_STD),
         ]
     )
 
@@ -34,6 +40,7 @@ def _train_transform(image_size: int, augment: bool) -> transforms.Compose:
             ]
         )
     ops.append(transforms.ToTensor())
+    ops.append(transforms.Normalize(mean=_IMAGENET_MEAN, std=_IMAGENET_STD))
     if augment:
         ops.append(
             transforms.RandomErasing(p=0.15, scale=(0.02, 0.1), ratio=(0.4, 2.5)),

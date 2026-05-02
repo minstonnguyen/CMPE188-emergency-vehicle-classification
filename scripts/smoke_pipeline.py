@@ -27,7 +27,7 @@ def main() -> int:
             "data/smoke_processed",
             "--quick",
             "--image-size",
-            "64",
+            "224",
         ]
     )
     run([sys.executable, "src/train.py", "--config", "configs/smoke.yaml"])

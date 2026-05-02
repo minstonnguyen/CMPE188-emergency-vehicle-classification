@@ -4,13 +4,13 @@ paths:
   output_dir: outputs
 
 training:
-  image_size: 128
+  image_size: 224
   batch_size: 8
-  epochs: 80
-  learning_rate: 0.001
+  epochs: 20
+  learning_rate: 0.00001
   seed: 42
   num_workers: 0
-  model: medium
+  model: resnet50
   augment_train: true
   weight_decay: 0.0001
   label_smoothing: 0.08
@@ -19,4 +19,4 @@ training:
   # Inverse-frequency weights in the loss help when class counts differ (e.g. more emergency than non-emergency).
   use_class_weights: true
   # Default to CPU for reproducibility on lab machines; set to cuda or auto if you have a GPU.
-  device: cpu
+  device: xpu

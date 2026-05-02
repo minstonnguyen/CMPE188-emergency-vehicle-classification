@@ -1,61 +1,39 @@
 from __future__ import annotations
 
 import torch
+import torchvision.models as tv_models
 
 
 def build_model(name: str, num_classes: int) -> torch.nn.Module:
-    key = (name or "small").lower().strip()
-    if key == "medium":
-        return MediumCNN(num_classes)
-    if key == "small":
-        return SmallCNN(num_classes)
-    raise ValueError(f"Unknown model name {name!r}; use 'small' or 'medium'.")
+    key = (name or "resnet50").lower().strip()
+    if key in ("resnet50", "medium", "small"):
+        return ResNet50Classifier(num_classes)
+    raise ValueError(f"Unknown model name {name!r}; use 'resnet50'.")
 
 
-class SmallCNN(torch.nn.Module):
-    """Small baseline model intended for coursework-sized experiments."""
+class ResNet50Classifier(torch.nn.Module):
+    """ResNet-50 backbone with a simple feedforward classification head.
 
-    def __init__(self, num_classes: int) -> None:
-        super().__init__()
-        self.features = torch.nn.Sequential(
-            torch.nn.Conv2d(3, 16, kernel_size=3, padding=1),
-            torch.nn.ReLU(),
-            torch.nn.MaxPool2d(2),
-            torch.nn.Conv2d(16, 32, kernel_size=3, padding=1),
-            torch.nn.ReLU(),
-            torch.nn.MaxPool2d(2),
-            torch.nn.Conv2d(32, 64, kernel_size=3, padding=1),
-            torch.nn.ReLU(),
-            torch.nn.AdaptiveAvgPool2d((1, 1)),
-        )
-        self.classifier = torch.nn.Linear(64, num_classes)
+    The torchvision ResNet-50 is loaded with ImageNet-pretrained weights.
+    Its original fully-connected layer is replaced with a two-layer MLP:
 
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        features = self.features(inputs)
-        return self.classifier(features.flatten(1))
-
-
-class MediumCNN(torch.nn.Module):
-    """Deeper / wider CNN for harder splits; still lightweight for CPU training."""
+        2048  →  ReLU  →  Dropout(0.5)  →  512  →  ReLU  →  num_classes
+    """
 
     def __init__(self, num_classes: int) -> None:
         super().__init__()
-        self.features = torch.nn.Sequential(
-            torch.nn.Conv2d(3, 32, kernel_size=3, padding=1),
-            torch.nn.ReLU(),
-            torch.nn.MaxPool2d(2),
-            torch.nn.Conv2d(32, 64, kernel_size=3, padding=1),
-            torch.nn.ReLU(),
-            torch.nn.MaxPool2d(2),
-            torch.nn.Conv2d(64, 128, kernel_size=3, padding=1),
-            torch.nn.ReLU(),
-            torch.nn.AdaptiveAvgPool2d((1, 1)),
-        )
-        self.classifier = torch.nn.Sequential(
-            torch.nn.Dropout(0.55),
-            torch.nn.Linear(128, num_classes),
+        backbone = tv_models.resnet50(weights=tv_models.ResNet50_Weights.DEFAULT)
+        # Remove the original classification head; keep everything up to the
+        # global average pool so the backbone outputs a (B, 2048) feature vector.
+        self.backbone = torch.nn.Sequential(*list(backbone.children())[:-1])
+        self.head = torch.nn.Sequential(
+            torch.nn.Linear(2048, 512),
+            torch.nn.ReLU(inplace=True),
+            torch.nn.Dropout(0.5),
+            torch.nn.Linear(512, num_classes),
         )
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        features = self.features(inputs)
-        return self.classifier(features.flatten(1))
+        features = self.backbone(inputs)       # (B, 2048, 1, 1)
+        features = features.flatten(1)         # (B, 2048)
+        return self.head(features)             # (B, num_classes)
