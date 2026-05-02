@@ -36,3 +36,9 @@ training:
     assert c.seed == 7
     assert c.num_workers == 0
     assert c.device == "cpu"
+    assert c.use_class_weights is False
+    assert c.model == "small"
+    assert c.augment_train is False
+    assert c.weight_decay == 0.0
+    assert c.label_smoothing == 0.0
+    assert c.early_stopping_patience is None

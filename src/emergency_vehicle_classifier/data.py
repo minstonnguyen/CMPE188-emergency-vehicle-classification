@@ -18,6 +18,29 @@ def _base_transform(image_size: int) -> transforms.Compose:
     )
 
 
+def _train_transform(image_size: int, augment: bool) -> transforms.Compose:
+    ops = [transforms.Resize((image_size, image_size))]
+    if augment:
+        ops.extend(
+            [
+                transforms.ColorJitter(
+                    brightness=0.2,
+                    contrast=0.2,
+                    saturation=0.15,
+                    hue=0.03,
+                ),
+                transforms.RandomHorizontalFlip(p=0.5),
+                transforms.RandomAffine(degrees=10, translate=(0.05, 0.05)),
+            ]
+        )
+    ops.append(transforms.ToTensor())
+    if augment:
+        ops.append(
+            transforms.RandomErasing(p=0.15, scale=(0.02, 0.1), ratio=(0.4, 2.5)),
+        )
+    return transforms.Compose(ops)
+
+
 def _require_dir(path: Path) -> None:
     if not path.exists():
         raise FileNotFoundError(
@@ -37,7 +60,8 @@ def build_dataloaders(
     _require_dir(val_dir)
     _require_dir(test_dir)
 
-    train_dataset = datasets.ImageFolder(train_dir, transform=_base_transform(config.image_size))
+    train_tf = _train_transform(config.image_size, config.augment_train)
+    train_dataset = datasets.ImageFolder(train_dir, transform=train_tf)
     val_dataset = datasets.ImageFolder(val_dir, transform=_base_transform(config.image_size))
     test_dataset = datasets.ImageFolder(test_dir, transform=_base_transform(config.image_size))
 

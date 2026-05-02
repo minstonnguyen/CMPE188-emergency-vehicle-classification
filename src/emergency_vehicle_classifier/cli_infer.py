@@ -59,12 +59,16 @@ def _list_images_in_dir(directory: Path) -> list[Path]:
 def _load_model_bundle(checkpoint_path: Path, device):
     import torch
 
-    from .model import SmallCNN
+    from .model import build_model
 
-    checkpoint = torch.load(checkpoint_path, map_location=device)
+    try:
+        checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    except TypeError:
+        checkpoint = torch.load(checkpoint_path, map_location=device)
     class_names: list[str] = checkpoint["class_names"]
     image_size: int = int(checkpoint["image_size"])
-    model = SmallCNN(num_classes=len(class_names)).to(device)
+    model_name = str(checkpoint.get("model_name", "small"))
+    model = build_model(model_name, len(class_names)).to(device)
     model.load_state_dict(checkpoint["model_state_dict"])
     model.eval()
     return model, class_names, image_size

@@ -21,6 +21,7 @@ def save_checkpoint(
     model: torch.nn.Module,
     class_names: list[str],
     image_size: int,
+    model_name: str = "small",
 ) -> None:
     ensure_dir(path.parent)
     torch.save(
@@ -28,6 +29,7 @@ def save_checkpoint(
             "model_state_dict": model.state_dict(),
             "class_names": class_names,
             "image_size": image_size,
+            "model_name": model_name,
         },
         path,
     )

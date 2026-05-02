@@ -6,9 +6,17 @@ paths:
 training:
   image_size: 128
   batch_size: 8
-  epochs: 5
+  epochs: 80
   learning_rate: 0.001
   seed: 42
   num_workers: 0
+  model: medium
+  augment_train: true
+  weight_decay: 0.0001
+  label_smoothing: 0.08
+  # Stop if validation loss does not improve for this many epochs (reduces overfitting to the train set).
+  early_stopping_patience: 10
+  # Inverse-frequency weights in the loss help when class counts differ (e.g. more emergency than non-emergency).
+  use_class_weights: true
   # Default to CPU for reproducibility on lab machines; set to cuda or auto if you have a GPU.
   device: cpu

@@ -18,6 +18,12 @@ class TrainingConfig:
     seed: int
     num_workers: int
     device: str
+    use_class_weights: bool = False
+    model: str = "small"
+    augment_train: bool = False
+    weight_decay: float = 0.0
+    label_smoothing: float = 0.0
+    early_stopping_patience: int | None = None
 
 
 def load_config(config_path: str | Path) -> TrainingConfig:
@@ -38,4 +44,15 @@ def load_config(config_path: str | Path) -> TrainingConfig:
         seed=int(training["seed"]),
         num_workers=int(training["num_workers"]),
         device=str(training["device"]),
+        use_class_weights=bool(training.get("use_class_weights", False)),
+        model=str(training.get("model", "small")),
+        augment_train=bool(training.get("augment_train", False)),
+        weight_decay=float(training.get("weight_decay", 0.0)),
+        label_smoothing=float(training.get("label_smoothing", 0.0)),
+        early_stopping_patience=(
+            int(training["early_stopping_patience"])
+            if training.get("early_stopping_patience") is not None
+            and int(training["early_stopping_patience"]) > 0
+            else None
+        ),
     )
